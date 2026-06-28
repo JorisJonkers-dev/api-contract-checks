@@ -1,15 +1,15 @@
-# Bootstrapping a new ExtraToast repo from this template
+# Bootstrapping a new JorisJonkers-dev repo from this template
 
 1. **Create the repo from the template** (GitHub "Use this template", or
-   `gh repo create ExtraToast/<name> --template ExtraToast/repo-template
+   `gh repo create JorisJonkers-dev/<name> --template JorisJonkers-dev/repo-template
    --private`).
 2. **Apply the branch ruleset** so `Pipeline Complete` is required:
    ```bash
-   scripts/apply-ruleset.sh ExtraToast/<name>
+   scripts/apply-ruleset.sh JorisJonkers-dev/<name>
    ```
 3. **Wire the real CI**: replace the placeholder `lint`/`test`/`build` jobs in
    `.github/workflows/ci.yml` with this repo's actual jobs (or calls into
-   reusable workflows from `ExtraToast/github-workflows`). Keep the
+   reusable workflows from `JorisJonkers-dev/github-workflows`). Keep the
    `pipeline-complete` aggregator and list every gating job in its `needs:`.
 4. **Set the release artifact**: edit `release.yml`'s `publish` job for this
    repo's artifact type (Maven / npm / image), and set `release-type` in

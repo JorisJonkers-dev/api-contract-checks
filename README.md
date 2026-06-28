@@ -10,9 +10,11 @@ The check follows the personal-stack assistant contract pattern:
 - regenerate generated TypeScript contract output, including
   `openapi-typescript` output where used
 - compare the fresh generated artifacts with the source-controlled files
+- optionally compare the fresh OpenAPI spec with a previous base spec using
+  `oasdiff breaking`
 
-Drift fails validation with the profile name, stage, affected path, diff output,
-and the maintainer-facing regeneration command.
+Validation fails with the profile name, stage, affected path, diff output or
+semantic report, and the maintainer-facing regeneration command.
 
 ## CLI
 
@@ -25,6 +27,8 @@ scripts/api-contract-checks.sh \
   --export-command './gradlew :services:assistant-api:exportOpenApiSpec' \
   --types-path services/assistant-ui/src/api/generated.ts \
   --types-generate-command 'pnpm --filter @personal-stack/assistant-ui contract:generate' \
+  --breaking-check true \
+  --breaking-base-ref origin/main \
   --guidance './gradlew :services:assistant-api:exportOpenApiSpec && pnpm --filter @personal-stack/assistant-ui contract:generate'
 ```
 
@@ -45,6 +49,11 @@ SPEC_NORMALIZE_COMMAND=""
 TYPES_PATHS=("services/assistant-ui/src/api/generated.ts")
 TYPES_GENERATE_COMMAND="pnpm --filter @personal-stack/assistant-ui contract:generate"
 TYPES_NORMALIZE_COMMAND=""
+BREAKING_CHECK="true"
+BREAKING_BASE_REF="origin/main"
+BREAKING_BASE_SPEC_PATH=""
+BREAKING_FAIL_ON="ERR"
+OASDIFF_VERSION="1.20.0"
 GUIDANCE="./gradlew :services:assistant-api:exportOpenApiSpec && pnpm --filter @personal-stack/assistant-ui contract:generate"
 ```
 
@@ -54,29 +63,39 @@ normalization commands run after generation; they receive
 `CONTRACT_PROFILE`, `CONTRACT_STAGE`, `CONTRACT_SPEC_PATH`, and
 `CONTRACT_TYPES_PATHS` in the environment.
 
+When `BREAKING_CHECK` is true, the CLI snapshots the base spec before export
+and runs `oasdiff breaking` against the fresh spec after export. If
+`BREAKING_BASE_SPEC_PATH` is set, it may point at the same file as
+`SPEC_PATH`; otherwise `BREAKING_BASE_REF` is used, defaulting to
+`origin/$GITHUB_BASE_REF` in pull requests or `origin/main` locally.
+
 ## Composite Action
 
 Consumers pin the released action tag:
 
 ```yaml
-- uses: ExtraToast/api-contract-checks@v0.1.0
+- uses: JorisJonkers-dev/api-contract-checks@v0.1.0
   with:
     profile: assistant-api
     spec-path: services/assistant-api/openapi.json
     export-command: ./gradlew :services:assistant-api:exportOpenApiSpec
     types-paths: services/assistant-ui/src/api/generated.ts
     types-generate-command: pnpm --filter @personal-stack/assistant-ui contract:generate
+    breaking-check: "true"
+    breaking-base-ref: origin/main
     guidance: ./gradlew :services:assistant-api:exportOpenApiSpec && pnpm --filter @personal-stack/assistant-ui contract:generate
 ```
 
 The artifact coordinate is intentionally short:
-`ExtraToast/api-contract-checks@vX.Y.Z`.
+`JorisJonkers-dev/api-contract-checks@vX.Y.Z`.
 
 ## Failure Meanings
 
 - `configuration`: a required profile field is missing or inconsistent.
 - `openapi-spec`: the committed spec is missing, the export command failed, the
   normalization command failed, or the exported spec differs.
+- `breaking-change`: the base spec is unavailable, `oasdiff` cannot be
+  installed, or the exported spec contains semantic breaking changes.
 - `types`: a committed generated artifact is missing, the generation command
   failed, the normalization command failed, or regenerated output differs.
 
@@ -86,7 +105,8 @@ failures are reported separately from content drift.
 ## Example
 
 `examples/basic` contains a minimal profile and generator pair. The self-test
-covers a clean run, spec drift, and generated TypeScript drift:
+covers a clean run, a clean semantic run, spec drift, generated TypeScript
+drift, and a deliberate breaking-change failure:
 
 ```bash
 tests/self-test.sh
