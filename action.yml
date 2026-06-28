@@ -30,6 +30,26 @@ inputs:
   guidance:
     description: Maintainer-facing regeneration command or note printed when drift is detected.
     required: true
+  breaking-check:
+    description: Run semantic OpenAPI breaking-change detection against the base spec.
+    required: false
+    default: "false"
+  breaking-base-ref:
+    description: Git ref containing the previous committed spec. Empty auto-detects origin/$GITHUB_BASE_REF.
+    required: false
+    default: ""
+  breaking-base-spec-path:
+    description: Optional previous spec file. May equal spec-path; it is snapshotted before export.
+    required: false
+    default: ""
+  breaking-fail-on:
+    description: oasdiff severity threshold, WARN or ERR.
+    required: false
+    default: ERR
+  oasdiff-version:
+    description: Pinned oasdiff CLI version.
+    required: false
+    default: "1.20.0"
 
 runs:
   using: composite
@@ -45,6 +65,11 @@ runs:
         INPUT_TYPES_GENERATE_COMMAND: ${{ inputs.types-generate-command }}
         INPUT_TYPES_NORMALIZE_COMMAND: ${{ inputs.types-normalize-command }}
         INPUT_GUIDANCE: ${{ inputs.guidance }}
+        INPUT_BREAKING_CHECK: ${{ inputs.breaking-check }}
+        INPUT_BREAKING_BASE_REF: ${{ inputs.breaking-base-ref }}
+        INPUT_BREAKING_BASE_SPEC_PATH: ${{ inputs.breaking-base-spec-path }}
+        INPUT_BREAKING_FAIL_ON: ${{ inputs.breaking-fail-on }}
+        INPUT_OASDIFF_VERSION: ${{ inputs.oasdiff-version }}
       run: |
         set -euo pipefail
 
@@ -53,6 +78,9 @@ runs:
           --spec-path "${INPUT_SPEC_PATH}"
           --export-command "${INPUT_EXPORT_COMMAND}"
           --guidance "${INPUT_GUIDANCE}"
+          --breaking-check "${INPUT_BREAKING_CHECK}"
+          --breaking-fail-on "${INPUT_BREAKING_FAIL_ON}"
+          --oasdiff-version "${INPUT_OASDIFF_VERSION}"
         )
 
         if [[ -n "${INPUT_SPEC_NORMALIZE_COMMAND}" ]]; then
@@ -66,6 +94,12 @@ runs:
         fi
         if [[ -n "${INPUT_TYPES_NORMALIZE_COMMAND}" ]]; then
           args+=(--types-normalize-command "${INPUT_TYPES_NORMALIZE_COMMAND}")
+        fi
+        if [[ -n "${INPUT_BREAKING_BASE_REF}" ]]; then
+          args+=(--breaking-base-ref "${INPUT_BREAKING_BASE_REF}")
+        fi
+        if [[ -n "${INPUT_BREAKING_BASE_SPEC_PATH}" ]]; then
+          args+=(--breaking-base-spec-path "${INPUT_BREAKING_BASE_SPEC_PATH}")
         fi
 
         "${GITHUB_ACTION_PATH}/scripts/api-contract-checks.sh" "${args[@]}"

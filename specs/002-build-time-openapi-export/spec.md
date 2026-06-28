@@ -2,7 +2,7 @@
 
 ## Overview
 
-ExtraToast services need a repeatable way to generate each service OpenAPI document from source code during the build without starting the full Spring Boot application. The current personal-stack reference flow depends on springdoc output from a running or fully initialized application path: assistant-api and knowledge-api run a tagged integration test against a fully loaded Spring context, while auth-api starts the boot jar briefly. The generated `openapi.json` then gates contract validation by comparing the fresh springdoc output with the committed file.
+JorisJonkers-dev services need a repeatable way to generate each service OpenAPI document from source code during the build without starting the full Spring Boot application. The current personal-stack reference flow depends on springdoc output from a running or fully initialized application path: assistant-api and knowledge-api run a tagged integration test against a fully loaded Spring context, while auth-api starts the boot jar briefly. The generated `openapi.json` then gates contract validation by comparing the fresh springdoc output with the committed file.
 
 This feature specifies a springdoc-backed build-time export path that keeps springdoc as the source of truth for schema rendering, but replaces full application startup with a lightweight Spring MVC/springdoc slice. The slice must load controllers, controller advice, Jackson/validation/web configuration, service OpenAPI configuration, and springdoc WebMVC resources only. It must serialize the same JSON or YAML document that `/api/v1/api-docs` would return, without binding a server socket, running the application entry point, starting external infrastructure, or loading persistence/message/runtime adapters.
 
@@ -125,7 +125,7 @@ The accepted shape should be:
 
 ### Recommended Home
 
-Place the Spring-specific export helper in `ExtraToast/kotlin-spring-commons`, module `test-support`, under an OpenAPI test-support package. This module already exists as a publishable shared test-support artifact and has Spring Boot test plus Spring Test dependencies. The capability is a test/build utility for Kotlin/Spring services, not a runtime service dependency.
+Place the Spring-specific export helper in `JorisJonkers-dev/kotlin-spring-commons`, module `test-support`, under an OpenAPI test-support package. This module already exists as a publishable shared test-support artifact and has Spring Boot test plus Spring Test dependencies. The capability is a test/build utility for Kotlin/Spring services, not a runtime service dependency.
 
 The optional Gradle task wiring can remain service-local during the first rollout. If repeated task registration later becomes noisy, that wiring belongs in shared Gradle conventions, while the springdoc/MVC exporter helper still belongs in `kotlin-spring-commons:test-support`.
 

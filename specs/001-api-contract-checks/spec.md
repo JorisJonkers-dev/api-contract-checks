@@ -2,7 +2,7 @@
 
 ## Overview
 
-ExtraToast/api-contract-checks defines shared internal checks for API contract drift. The feature exists so service repositories can prevent API changes from landing unless the committed OpenAPI spec and the generated TypeScript contract artifacts are updated in the same change.
+JorisJonkers-dev/api-contract-checks defines shared internal checks for API contract drift. The feature exists so service repositories can prevent API changes from landing unless the committed OpenAPI spec and the generated TypeScript contract artifacts are updated in the same change.
 
 The immediate reference behavior is the personal-stack contract validation flow for assistant-api and assistant-ui: an exported Spring OpenAPI spec is compared with `services/assistant-api/openapi.json`, then generated TypeScript output is compared with `services/assistant-ui/src/api/generated.ts`. The website repository has analogous OpenAPI generation and frontend client validation for `services/api/openapi.json` and the Blueshell frontend client outputs. This repository supplies the reusable contract-check specification for those consumers rather than duplicating drift logic in each repository.
 
@@ -15,7 +15,7 @@ The immediate reference behavior is the personal-stack contract validation flow 
 
 ## Functional Requirements (FR-n)
 
-- FR-1: The feature must define a reusable contract-drift check owned by ExtraToast/api-contract-checks and consumable by personal-stack and website as a versioned artifact.
+- FR-1: The feature must define a reusable contract-drift check owned by JorisJonkers-dev/api-contract-checks and consumable by personal-stack and website as a versioned artifact.
 - FR-2: The reusable check must be usable from local validation and CI validation in a consumer repository through at least one supported invocation surface suitable for command-line, script, or composite-action use.
 - FR-3: The reusable check must be parameterized per service profile rather than hard-coded to assistant-api, assistant-ui, personal-stack, or website paths.
 - FR-4: Each service profile must identify the service name, committed OpenAPI spec path, spec export behavior, generated TypeScript artifact path or paths, type regeneration behavior, and human-readable regeneration guidance.
@@ -69,7 +69,7 @@ The immediate reference behavior is the personal-stack contract validation flow 
 - Exported OpenAPI Spec: The current spec emitted from the service under validation.
 - Generated TypeScript Artifact: A source-controlled TypeScript contract output generated from the committed OpenAPI spec.
 - Drift Report: The validation failure output that identifies what changed and how to regenerate the committed artifacts.
-- Versioned Artifact: The released deliverable from ExtraToast/api-contract-checks that consumers pin through Renovate.
+- Versioned Artifact: The released deliverable from JorisJonkers-dev/api-contract-checks that consumers pin through Renovate.
 
 ## Out of Scope
 

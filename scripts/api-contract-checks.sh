@@ -11,6 +11,11 @@ Usage:
     [--types-path <path> ... | --types-paths <newline-or-comma-list>] \
     [--types-generate-command <command>] \
     [--types-normalize-command <command>] \
+    [--breaking-check true|false] \
+    [--breaking-base-ref <git-ref>] \
+    [--breaking-base-spec-path <path>] \
+    [--breaking-fail-on WARN|ERR] \
+    [--oasdiff-version <version>] \
     --guidance <command-or-note>
 
   api-contract-checks.sh --profile-file <file> [--profile-file <file> ...]
@@ -25,6 +30,11 @@ Profile files are Bash fragments with these fields:
   TYPES_PATHS_TEXT             optional newline-or-comma list
   TYPES_GENERATE_COMMAND       optional when TYPES_PATHS is empty
   TYPES_NORMALIZE_COMMAND      optional
+  BREAKING_CHECK               optional true|false, default false
+  BREAKING_BASE_REF            optional git ref containing the previous spec
+  BREAKING_BASE_SPEC_PATH      optional previous spec file path
+  BREAKING_FAIL_ON             optional WARN|ERR, default ERR
+  OASDIFF_VERSION              optional oasdiff version, default 1.20.0
   GUIDANCE
 USAGE
 }
@@ -212,6 +222,118 @@ compare_paths() {
   return "$status"
 }
 
+ensure_git_ref_available() {
+  local ref=$1
+  local branch
+
+  if git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+    return 0
+  fi
+
+  if [[ $ref == origin/* ]]; then
+    branch=${ref#origin/}
+    git fetch --depth=1 origin "$branch" >/dev/null 2>&1 || true
+  fi
+
+  git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null
+}
+
+resolve_breaking_base_ref() {
+  local explicit_ref=$1
+
+  if [[ -n $explicit_ref ]]; then
+    printf '%s' "$explicit_ref"
+  elif [[ -n ${GITHUB_BASE_REF:-} ]]; then
+    printf 'origin/%s' "${GITHUB_BASE_REF}"
+  else
+    printf 'origin/main'
+  fi
+}
+
+snapshot_breaking_base() {
+  local spec_path=$1
+  local breaking_base_ref=$2
+  local breaking_base_spec_path=$3
+  local destination=$4
+  local profile=$5
+  local guidance=$6
+  local resolved_ref
+
+  mkdir -p -- "$(dirname -- "$destination")"
+
+  if [[ -n $breaking_base_spec_path ]]; then
+    if [[ ! -f $breaking_base_spec_path ]]; then
+      print_failure "$profile" "breaking-change" "$breaking_base_spec_path" "breaking base spec is missing" "$guidance"
+      return 1
+    fi
+    cp -- "$breaking_base_spec_path" "$destination"
+    return 0
+  fi
+
+  if ! command -v git >/dev/null 2>&1; then
+    print_failure "$profile" "breaking-change" "$spec_path" "git is required when breaking-base-spec-path is not set" "$guidance"
+    return 1
+  fi
+
+  resolved_ref=$(resolve_breaking_base_ref "$breaking_base_ref")
+  if ! ensure_git_ref_available "$resolved_ref"; then
+    print_failure "$profile" "breaking-change" "$spec_path" "unable to resolve breaking base ref: ${resolved_ref}" "$guidance"
+    return 1
+  fi
+
+  if ! git show "${resolved_ref}:${spec_path}" >"$destination"; then
+    print_failure "$profile" "breaking-change" "$spec_path" "unable to read base spec from ${resolved_ref}:${spec_path}" "$guidance"
+    return 1
+  fi
+}
+
+install_oasdiff() {
+  local version=$1
+  local install_dir=$2
+
+  mkdir -p -- "$install_dir"
+
+  if [[ -n ${OASDIFF_BIN:-} ]]; then
+    if [[ ! -x $OASDIFF_BIN ]]; then
+      printf 'OASDIFF_BIN is not executable: %s\n' "$OASDIFF_BIN" >&2
+      return 1
+    fi
+    cp -- "$OASDIFF_BIN" "$install_dir/oasdiff"
+    chmod +x -- "$install_dir/oasdiff"
+    return 0
+  fi
+
+  curl -fsSL https://raw.githubusercontent.com/oasdiff/oasdiff/main/install.sh \
+    | INSTALL_DIR="$install_dir" version="$version" sh
+}
+
+run_breaking_check() {
+  local profile=$1
+  local spec_path=$2
+  local base_snapshot=$3
+  local breaking_fail_on=$4
+  local oasdiff_version=$5
+  local install_dir=$6
+  local guidance=$7
+
+  printf '\ncontract check command\n'
+  printf 'profile: %s\n' "$profile"
+  printf 'stage: breaking-change\n'
+  printf 'command: oasdiff breaking %s %s --fail-on %s --format text\n' "$base_snapshot" "$spec_path" "$breaking_fail_on"
+
+  if ! install_oasdiff "$oasdiff_version" "$install_dir"; then
+    print_failure "$profile" "breaking-change" "$spec_path" "oasdiff installation failed" "$guidance"
+    return 1
+  fi
+
+  if "$install_dir/oasdiff" breaking "$base_snapshot" "$spec_path" --fail-on "$breaking_fail_on" --format text; then
+    return 0
+  fi
+
+  print_failure "$profile" "breaking-change" "$spec_path" "breaking OpenAPI change detected" "$guidance"
+  return 1
+}
+
 types_paths_as_text() {
   local path
   for path in "$@"; do
@@ -245,15 +367,24 @@ run_profile() {
   local types_generate_command=$5
   local types_normalize_command=$6
   local guidance=$7
-  shift 7
+  local breaking_check=${8:-false}
+  local breaking_base_ref=${9:-}
+  local breaking_base_spec_path=${10:-}
+  local breaking_fail_on=${11:-ERR}
+  local oasdiff_version=${12:-1.20.0}
+  shift 12
   local -a types_paths=("$@")
 
   local status=0
   local spec_snapshot_ok=1
   local types_snapshot_ok=1
+  local breaking_base_ok=1
+  local spec_export_ok=1
   local tmp_dir
   local spec_snapshot
   local types_snapshot
+  local breaking_base_snapshot
+  local oasdiff_install_dir
   local types_paths_text
 
   if [[ -z $profile ]]; then
@@ -280,10 +411,24 @@ run_profile() {
     print_failure "$profile" "configuration" "" "TYPES_PATHS is required when TYPES_GENERATE_COMMAND is set" "$guidance"
     return 1
   fi
+  if [[ $breaking_check != "true" && $breaking_check != "false" ]]; then
+    print_failure "$profile" "configuration" "$spec_path" "BREAKING_CHECK must be true or false" "$guidance"
+    return 1
+  fi
+  if [[ $breaking_fail_on != "WARN" && $breaking_fail_on != "ERR" ]]; then
+    print_failure "$profile" "configuration" "$spec_path" "BREAKING_FAIL_ON must be WARN or ERR" "$guidance"
+    return 1
+  fi
+  if [[ $breaking_check == "true" && -z $oasdiff_version ]]; then
+    print_failure "$profile" "configuration" "$spec_path" "OASDIFF_VERSION is required when BREAKING_CHECK is true" "$guidance"
+    return 1
+  fi
 
   tmp_dir=$(mktemp -d)
   spec_snapshot=$tmp_dir/spec
   types_snapshot=$tmp_dir/types
+  breaking_base_snapshot=$tmp_dir/base-openapi.json
+  oasdiff_install_dir=$tmp_dir/bin
   mkdir -p -- "$spec_snapshot" "$types_snapshot"
 
   printf '\ncontract check profile\n'
@@ -294,20 +439,35 @@ run_profile() {
     status=1
   fi
 
+  if [[ $breaking_check == "true" ]]; then
+    if ! snapshot_breaking_base "$spec_path" "$breaking_base_ref" "$breaking_base_spec_path" "$breaking_base_snapshot" "$profile" "$guidance"; then
+      breaking_base_ok=0
+      status=1
+    fi
+  fi
+
   types_paths_text=$(types_paths_as_text "${types_paths[@]}")
 
   if ! run_declared_command "$profile" "openapi-spec" "$spec_export_command" "$spec_path" "$types_paths_text"; then
     print_failure "$profile" "openapi-spec" "$spec_path" "export command failed" "$guidance"
+    spec_export_ok=0
     status=1
   elif [[ -n $spec_normalize_command ]]; then
     if ! run_declared_command "$profile" "openapi-spec-normalize" "$spec_normalize_command" "$spec_path" "$types_paths_text"; then
       print_failure "$profile" "openapi-spec" "$spec_path" "normalization command failed" "$guidance"
+      spec_export_ok=0
       status=1
     fi
   fi
 
   if [[ $spec_snapshot_ok -eq 1 ]]; then
     if ! compare_paths "$spec_snapshot" "$profile" "openapi-spec" "$guidance" "$spec_path"; then
+      status=1
+    fi
+  fi
+
+  if [[ $breaking_check == "true" && $breaking_base_ok -eq 1 && $spec_export_ok -eq 1 ]]; then
+    if ! run_breaking_check "$profile" "$spec_path" "$breaking_base_snapshot" "$breaking_fail_on" "$oasdiff_version" "$oasdiff_install_dir" "$guidance"; then
       status=1
     fi
   fi
@@ -356,6 +516,11 @@ load_profile_file() {
   local TYPES_GENERATE_COMMAND=""
   local TYPES_NORMALIZE_COMMAND=""
   local TYPES_PATHS_TEXT=""
+  local BREAKING_CHECK="false"
+  local BREAKING_BASE_REF=""
+  local BREAKING_BASE_SPEC_PATH=""
+  local BREAKING_FAIL_ON="ERR"
+  local OASDIFF_VERSION="1.20.0"
   local GUIDANCE=""
   local -a TYPES_PATHS=()
 
@@ -387,6 +552,11 @@ load_profile_file() {
     "$TYPES_GENERATE_COMMAND" \
     "$TYPES_NORMALIZE_COMMAND" \
     "$GUIDANCE" \
+    "$BREAKING_CHECK" \
+    "$BREAKING_BASE_REF" \
+    "$BREAKING_BASE_SPEC_PATH" \
+    "$BREAKING_FAIL_ON" \
+    "$OASDIFF_VERSION" \
     "${TYPES_PATHS[@]}"
 }
 
@@ -408,6 +578,11 @@ main() {
   local direct_types_generate_command=""
   local direct_types_normalize_command=""
   local direct_guidance=""
+  local direct_breaking_check="false"
+  local direct_breaking_base_ref=""
+  local direct_breaking_base_spec_path=""
+  local direct_breaking_fail_on="ERR"
+  local direct_oasdiff_version="1.20.0"
   local profiles_dir=""
   local has_direct=0
   local matched_count=0
@@ -495,6 +670,36 @@ main() {
         has_direct=1
         shift 2
         ;;
+      --breaking-check)
+        require_value "$arg" "${2:-}"
+        direct_breaking_check=$2
+        has_direct=1
+        shift 2
+        ;;
+      --breaking-base-ref)
+        require_value "$arg" "${2:-}"
+        direct_breaking_base_ref=$2
+        has_direct=1
+        shift 2
+        ;;
+      --breaking-base-spec-path)
+        require_value "$arg" "${2:-}"
+        direct_breaking_base_spec_path=$2
+        has_direct=1
+        shift 2
+        ;;
+      --breaking-fail-on)
+        require_value "$arg" "${2:-}"
+        direct_breaking_fail_on=$2
+        has_direct=1
+        shift 2
+        ;;
+      --oasdiff-version)
+        require_value "$arg" "${2:-}"
+        direct_oasdiff_version=$2
+        has_direct=1
+        shift 2
+        ;;
       *)
         printf '%s: unknown argument: %s\n' "$program" "$arg" >&2
         usage >&2
@@ -534,6 +739,11 @@ main() {
       "$direct_types_generate_command" \
       "$direct_types_normalize_command" \
       "$direct_guidance" \
+      "$direct_breaking_check" \
+      "$direct_breaking_base_ref" \
+      "$direct_breaking_base_spec_path" \
+      "$direct_breaking_fail_on" \
+      "$direct_oasdiff_version" \
       "${direct_types_paths[@]}"
     exit $?
   fi
