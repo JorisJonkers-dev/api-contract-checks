@@ -20,3 +20,15 @@ node_modules/
 
 # Logs
 *.log
+
+# Planning/scratch artifacts
+.specify/
+specs/[0-9][0-9][0-9]-*/
+plans/
+planning/
+scratchpad/
+scratchpads/
+.agent-council/
+*scratchpad*.md
+*.scratch.md
+*agent-council*.md

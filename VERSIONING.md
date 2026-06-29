@@ -30,7 +30,7 @@ SemVer: pre-1.0 (`0.y.z`) treats minor as the breaking lever
   ```
 - **npm**: pin exact versions in the manifest (no `^`/`~`).
 - **GitHub Actions / reusable workflows**: pin to a release tag (and digest via
-  Renovate), e.g. `uses: JorisJonkers-dev/github-workflows/.github/workflows/jvm-ci.yml@v0.6.0`.
+  Renovate), e.g. `uses: JorisJonkers-dev/github-workflows/.github/workflows/jvm-ci.yml@v0.8.0`.
 
 [Renovate](renovate.json) opens exact-version bump PRs (JorisJonkers-dev artifacts
 grouped into one platform bump). Every bump PR must pass `Pipeline Complete`

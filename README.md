@@ -1,24 +1,24 @@
 # api-contract-checks
 
-Shared drift checks for committed OpenAPI specs and generated TypeScript
-contract artifacts.
+Reusable OpenAPI and generated TypeScript contract drift checks for
+JorisJonkers-dev repositories.
 
-The check follows the personal-stack assistant contract pattern:
+## What It Is
 
-- export the current service OpenAPI document into the committed spec path
-- compare that fresh spec with the source-controlled file
-- regenerate generated TypeScript contract output, including
-  `openapi-typescript` output where used
-- compare the fresh generated artifacts with the source-controlled files
-- optionally compare the fresh OpenAPI spec with a previous base spec using
-  `oasdiff breaking`
+`api-contract-checks` is a Bash CLI and composite GitHub Action that validates
+that committed API contract artifacts still match fresh outputs from a service
+build.
 
-Validation fails with the profile name, stage, affected path, diff output or
-semantic report, and the maintainer-facing regeneration command.
+It can:
+
+- export a fresh OpenAPI document into the committed spec path
+- regenerate generated TypeScript contract files in place
+- compare both outputs against source control
+- run optional `oasdiff breaking` checks against a base spec
 
 ## CLI
 
-Run a single profile directly:
+Run one profile directly:
 
 ```bash
 scripts/api-contract-checks.sh \
@@ -39,35 +39,10 @@ scripts/api-contract-checks.sh --profiles-dir .github/contract-profiles
 scripts/api-contract-checks.sh --profiles-dir .github/contract-profiles --only assistant-api
 ```
 
-Profile files are trusted Bash fragments:
-
-```bash
-PROFILE_NAME="assistant-api"
-SPEC_PATH="services/assistant-api/openapi.json"
-SPEC_EXPORT_COMMAND="./gradlew :services:assistant-api:exportOpenApiSpec"
-SPEC_NORMALIZE_COMMAND=""
-TYPES_PATHS=("services/assistant-ui/src/api/generated.ts")
-TYPES_GENERATE_COMMAND="pnpm --filter @personal-stack/assistant-ui contract:generate"
-TYPES_NORMALIZE_COMMAND=""
-BREAKING_CHECK="true"
-BREAKING_BASE_REF="origin/main"
-BREAKING_BASE_SPEC_PATH=""
-BREAKING_FAIL_ON="ERR"
-OASDIFF_VERSION="1.20.0"
-GUIDANCE="./gradlew :services:assistant-api:exportOpenApiSpec && pnpm --filter @personal-stack/assistant-ui contract:generate"
-```
-
-Paths are resolved from the command working directory. Export and generation
-commands must write their declared committed paths in place. Optional
-normalization commands run after generation; they receive
-`CONTRACT_PROFILE`, `CONTRACT_STAGE`, `CONTRACT_SPEC_PATH`, and
-`CONTRACT_TYPES_PATHS` in the environment.
-
-When `BREAKING_CHECK` is true, the CLI snapshots the base spec before export
-and runs `oasdiff breaking` against the fresh spec after export. If
-`BREAKING_BASE_SPEC_PATH` is set, it may point at the same file as
-`SPEC_PATH`; otherwise `BREAKING_BASE_REF` is used, defaulting to
-`origin/$GITHUB_BASE_REF` in pull requests or `origin/main` locally.
+Profile files are trusted Bash fragments. Export and generation commands must
+write their declared committed paths in place. Optional normalization commands
+run after generation and receive `CONTRACT_PROFILE`, `CONTRACT_STAGE`,
+`CONTRACT_SPEC_PATH`, and `CONTRACT_TYPES_PATHS` in the environment.
 
 ## Composite Action
 
@@ -81,39 +56,28 @@ Consumers pin the released action tag:
     export-command: ./gradlew :services:assistant-api:exportOpenApiSpec
     types-paths: services/assistant-ui/src/api/generated.ts
     types-generate-command: pnpm --filter @personal-stack/assistant-ui contract:generate
-    breaking-check: "true"
+    breaking-check: 'true'
     breaking-base-ref: origin/main
     guidance: ./gradlew :services:assistant-api:exportOpenApiSpec && pnpm --filter @personal-stack/assistant-ui contract:generate
 ```
 
-The artifact coordinate is intentionally short:
-`JorisJonkers-dev/api-contract-checks@vX.Y.Z`.
-
-## Failure Meanings
-
-- `configuration`: a required profile field is missing or inconsistent.
-- `openapi-spec`: the committed spec is missing, the export command failed, the
-  normalization command failed, or the exported spec differs.
-- `breaking-change`: the base spec is unavailable, `oasdiff` cannot be
-  installed, or the exported spec contains semantic breaking changes.
-- `types`: a committed generated artifact is missing, the generation command
-  failed, the normalization command failed, or regenerated output differs.
-
-Every drift failure prints a recursive unified diff. Missing files and command
-failures are reported separately from content drift.
-
-## Example
-
-`examples/basic` contains a minimal profile and generator pair. The self-test
-covers a clean run, a clean semantic run, spec drift, generated TypeScript
-drift, and a deliberate breaking-change failure:
+## Local Use
 
 ```bash
 tests/self-test.sh
 ```
 
-## Release
+`examples/basic` contains a minimal profile and generator pair. The self-test
+covers clean runs, spec drift, generated TypeScript drift, and a deliberate
+breaking-change failure.
 
-Releases are managed by release-please. Consumers pin exact release tags and
-receive Renovate update proposals for new versions. Adopting this check does
-not require versioning a consuming application repository.
+## Links
+
+- [Organization profile](https://github.com/JorisJonkers-dev)
+- [Security policy](https://github.com/JorisJonkers-dev/.github/security/policy)
+- [Changelog](./CHANGELOG.md)
+- [License](./LICENSE)
+
+Copyright (c) Joris Jonkers. Source available for viewing only; use, copying,
+modification, redistribution, deployment, or reuse is not licensed. See
+[LICENSE](./LICENSE).
