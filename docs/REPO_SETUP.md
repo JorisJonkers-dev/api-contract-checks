@@ -29,7 +29,7 @@
 | `.github/rulesets/main.json` + `scripts/apply-ruleset.sh` | Org ruleset as code (requires `Pipeline Complete`) |
 | `.github/PULL_REQUEST_TEMPLATE.md` | PR template (tracking + verification + versioning) |
 | `.github/ISSUE_TEMPLATE/*` | Bug / feature / task forms |
-| `.github/CODEOWNERS`, `dependabot.yml`, `renovate.json` | Ownership + dependency automation |
+| `.github/CODEOWNERS`, `renovate.json` | Ownership + dependency automation |
 | `release-please-config.json`, `.release-please-manifest.json` | Versioning state |
 | `CONTRIBUTING.md`, `VERSIONING.md`, `SECURITY.md` | Conventions |
 | `.editorconfig`, `.gitignore`, `.gitleaks.toml`, `LICENSE` | Baseline hygiene |
