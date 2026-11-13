@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/JorisJonkers-dev/api-contract-checks/compare/v1.1.0...v1.1.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* **hygiene:** never cancel a run of the required hygiene checks ([#28](https://github.com/JorisJonkers-dev/api-contract-checks/issues/28)) ([7538667](https://github.com/JorisJonkers-dev/api-contract-checks/commit/75386671000fc745669934bab405b0f832b1ff31))
+
 ## [1.1.0](https://github.com/JorisJonkers-dev/api-contract-checks/compare/v1.0.0...v1.1.0) (2026-06-28)
 
 
